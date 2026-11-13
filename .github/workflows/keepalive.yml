@@ -1,0 +1,28 @@
+# Supabase pauses free-tier projects after 7 days without API activity.
+# This pings the project's REST API twice a week to keep it awake.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '17 6 * * 1,4'   # Monday and Thursday, 06:17 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: https://tpnfzwkywipiclxozimb.supabase.co
+          # Publishable key: public by design (it is also in index.html); RLS protects the data.
+          SUPABASE_KEY: sb_publishable_IIFwQYf4XomXK7e7mpoALg_YycZtWZg
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "apikey: $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/children?select=id&limit=1")
+          echo "HTTP $code"
+          # 200 = OK (anon sees zero rows because of RLS). Anything 5xx or 000 means the project is down/paused.
+          [ "$code" -lt 500 ] && [ "$code" != "000" ]

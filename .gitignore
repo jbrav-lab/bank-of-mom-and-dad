@@ -1,0 +1,14 @@
+# Real family data (names) — never commit
+supabase/seed.local.sql
+*.local.*
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+node_modules/
+*.log
+.claude/

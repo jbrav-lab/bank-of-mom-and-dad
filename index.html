@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <!--
+    Content-Security-Policy (XSS mitigation). GitHub Pages cannot send custom
+    HTTP headers, so this meta tag is the only CSP. Only this page's inline code,
+    the pinned supabase-js bundle on jsDelivr, and this app's Supabase project are allowed.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="
+          default-src 'self';
+          script-src  'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+          connect-src 'self' https://tpnfzwkywipiclxozimb.supabase.co wss://tpnfzwkywipiclxozimb.supabase.co;
+          style-src   'self' 'unsafe-inline';
+          img-src     'self' data:;
+          font-src    'self';
+          manifest-src 'self';
+          object-src  'none';
+          base-uri    'self';
+          form-action 'self';
+        ">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="בנק אמא ואבא">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>בנק אמא ואבא 🏦</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+      background: #667eea linear-gradient(135deg, #667eea 0%, #764ba2 100%) fixed;
+      min-height: 100vh; min-height: 100dvh;
+      direction: rtl; color: #222;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      overflow-x: hidden;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    input  { font: inherit; }
+    .screen { display: none; max-width: 560px; margin: 0 auto; padding: 14px 16px 32px; }
+    .screen.active { display: block; }
+
+    /* ── Top bar ── */
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: white; margin-bottom: 14px; min-height: 44px; }
+    .bar h1 { font-size: 1.25rem; font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar small { display: block; font-size: 0.8rem; font-weight: 400; opacity: 0.85; }
+    .pill-btn { background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 50px; padding: 0 16px; min-height: 40px; font-size: 0.95rem; white-space: nowrap; }
+    .pill-btn:active { background: rgba(255,255,255,0.35); }
+
+    /* ── Login ── */
+    #login.active { display: flex; flex-direction: column; justify-content: center; min-height: calc(100dvh - 40px); }
+    .login-title { font-size: 2.1rem; color: white; text-align: center; margin-bottom: 6px; text-shadow: 2px 2px 4px rgba(0,0,0,0.25); }
+    .login-sub { color: rgba(255,255,255,0.85); text-align: center; margin-bottom: 24px; }
+    .card { background: white; border-radius: 20px; padding: 18px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); margin-bottom: 14px; }
+    .card h2 { font-size: 1.05rem; color: #444; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* ── Form controls ── */
+    .field { margin-bottom: 14px; }
+    .field > label, .field > .lbl { display: block; font-size: 0.88rem; color: #666; margin-bottom: 6px; }
+    .input { width: 100%; min-height: 48px; padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 16px; outline: none; background: white; }
+    .input:focus { border-color: #667eea; }
+    .input.ltr { direction: ltr; text-align: left; }
+    .input.amount { font-size: 1.6rem; font-weight: 700; text-align: center; direction: ltr; min-height: 60px; }
+    .seg { display: flex; gap: 6px; }
+    .seg label, .chips-wrap label { flex: 1; }
+    .seg input, .chips-wrap input { position: absolute; opacity: 0; pointer-events: none; }
+    .seg span { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 0.9rem; text-align: center; padding: 4px; line-height: 1.2; }
+    .seg span b { font-size: 1.2rem; font-weight: 400; }
+    .seg input:checked + span { border-color: #667eea; background: #eef0fd; color: #3f3fae; font-weight: 700; }
+    .chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chips-wrap label { flex: 0 0 auto; }
+    .chips-wrap span { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border: 2px solid #e5e7eb; border-radius: 50px; font-size: 0.9rem; white-space: nowrap; }
+    .chips-wrap input:checked + span { border-color: #667eea; background: #eef0fd; color: #3f3fae; font-weight: 700; }
+    .seg input:focus-visible + span, .chips-wrap input:focus-visible + span { outline: 3px solid #a5b4fc; }
+
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 52px; border: none; border-radius: 14px; color: white; font-size: 1.05rem; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); }
+    .btn:disabled { opacity: 0.5; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn.red    { background: linear-gradient(135deg, #f87171, #dc2626); }
+    .btn.green  { background: linear-gradient(135deg, #22c55e, #16a34a); }
+    .btn.pink   { background: linear-gradient(135deg, #ec4899, #be185d); }
+    .btn.blue   { background: linear-gradient(135deg, #667eea, #3b82f6); }
+    .btn.amber  { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .btn.ghost  { background: white; color: #555; border: 2px solid #e5e7eb; font-weight: 600; }
+    .btn.confirming { background: #111827 !important; }
+
+    /* ── Parent home ── */
+    .kid-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .kid-chip { background: rgba(255,255,255,0.18); border: 2px solid transparent; border-radius: 16px; color: white; padding: 8px 6px; min-height: 76px; text-align: center; }
+    .kid-chip .av { font-size: 1.6rem; line-height: 1.1; }
+    .kid-chip .nm { font-weight: 700; font-size: 1rem; }
+    .kid-chip .tt { font-size: 0.78rem; opacity: 0.9; direction: rtl; }
+    .kid-chip[aria-pressed="true"] { background: white; color: #3f3fae; border-color: white; box-shadow: 0 4px 14px rgba(0,0,0,0.18); }
+
+    .acc-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .acc { border-radius: 16px; padding: 10px 8px; color: white; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+    .acc .ic { font-size: 1.3rem; }
+    .acc .lb { font-size: 0.82rem; font-weight: 600; }
+    .acc .am { font-size: 1.15rem; font-weight: 800; direction: rtl; white-space: nowrap; }
+    .spending { background: linear-gradient(135deg, #f6b365, #fd8a65); }
+    .savings  { background: linear-gradient(135deg, #5fd3f3, #4c8dff); }
+    .invest   { background: linear-gradient(135deg, #7ddad5, #e9a6c4); color: #333; }
+
+    .big-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .big-actions .btn { min-height: 84px; font-size: 1.2rem; flex-direction: column; gap: 2px; border-radius: 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+    .big-actions .btn b { font-size: 1.7rem; line-height: 1; }
+    .small-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+    .small-actions button { background: rgba(255,255,255,0.18); color: white; border: none; border-radius: 14px; min-height: 52px; font-size: 0.9rem; font-weight: 600; }
+    .small-actions button:active { background: rgba(255,255,255,0.32); }
+
+    /* ── Transaction list ── */
+    .tx-list { list-style: none; }
+    .tx { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+    .tx:last-child { border-bottom: none; }
+    .tx-main { flex: 1; min-width: 0; }
+    .tx-desc { font-weight: 600; color: #333; word-break: break-word; }
+    .tx-meta { font-size: 0.78rem; color: #888; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+    .tx-side { text-align: left; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .tx-amt { font-weight: 800; font-size: 1.05rem; white-space: nowrap; direction: ltr; }
+    .pos { color: #16a34a; } .neg { color: #dc2626; } .xfer { color: #667eea; }
+    .undo { border: 1px solid #e5e7eb; background: white; border-radius: 50px; font-size: 0.78rem; padding: 0 10px; min-height: 32px; color: #555; white-space: nowrap; }
+    .undo.confirming { background: #111827; color: white; border-color: #111827; }
+    .reversed .tx-desc, .reversed .tx-amt { text-decoration: line-through; opacity: 0.55; }
+    .empty { text-align: center; color: #aaa; padding: 18px 0; }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .b-exp { background: #fee2e2; color: #dc2626; } .b-dep { background: #dcfce7; color: #16a34a; }
+    .b-int { background: #fef3c7; color: #b45309; } .b-xfer { background: #ede9fe; color: #7c3aed; }
+    .b-gift { background: #fce7f3; color: #be185d; } .b-adj { background: #e5e7eb; color: #374151; }
+    .link-btn { background: none; border: none; color: #667eea; font-weight: 700; font-size: 0.9rem; min-height: 36px; }
+    .filter { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 2px; scrollbar-width: none; }
+    .filter button { flex: 0 0 auto; background: rgba(255,255,255,0.18); color: white; border: none; border-radius: 50px; min-height: 40px; padding: 0 16px; font-weight: 600; }
+    .filter button[aria-pressed="true"] { background: white; color: #3f3fae; }
+
+    /* ── Kid dashboard ── */
+    .kid-total { text-align: center; color: white; margin-bottom: 14px; }
+    .kid-total .big { font-size: 2.3rem; font-weight: 800; }
+    .kid-accs { display: grid; gap: 10px; margin-bottom: 14px; }
+    .kid-accs .acc { display: flex; align-items: center; gap: 12px; text-align: right; padding: 14px 16px; border-radius: 18px; }
+    .kid-accs .ic { font-size: 2rem; }
+    .kid-accs .lb { font-size: 1.05rem; }
+    .kid-accs .ds { font-size: 0.8rem; opacity: 0.85; }
+    .kid-accs .am { margin-inline-start: auto; font-size: 1.5rem; }
+
+    /* ── Bottom sheet ── */
+    .overlay { position: fixed; inset: 0; background: rgba(17,24,39,0.5); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .overlay.open { opacity: 1; pointer-events: auto; }
+    .sheet {
+      position: fixed; left: 0; right: 0; bottom: var(--kb, 0px); z-index: 101;
+      max-width: 560px; margin: 0 auto; background: white; border-radius: 22px 22px 0 0;
+      max-height: calc(var(--vvh, 100dvh) - 24px); display: flex; flex-direction: column;
+      transform: translateY(105%); transition: transform 0.25s ease; box-shadow: 0 -6px 30px rgba(0,0,0,0.2);
+    }
+    .sheet.open { transform: translateY(0); }
+    .sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 6px 16px; border-bottom: 1px solid #f0f0f0; }
+    .sheet-head h3 { font-size: 1.15rem; }
+    .sheet-head .x { background: #f3f4f6; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 1.1rem; }
+    .grab { width: 40px; height: 5px; background: #e5e7eb; border-radius: 3px; margin: 8px auto 0; }
+    .sheet form { display: none; flex-direction: column; min-height: 0; flex: 1; }
+    .sheet form.active { display: flex; }
+    .sheet-body { overflow-y: auto; padding: 14px 16px 6px; -webkit-overflow-scrolling: touch; }
+    .sheet-foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #f0f0f0; background: white; }
+    .hint { font-size: 0.85rem; color: #888; margin-bottom: 12px; }
+    .divider { display: flex; align-items: center; gap: 10px; color: #aaa; font-size: 0.85rem; margin: 6px 0 14px; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .row3 .input { text-align: center; direction: ltr; padding: 10px 6px; }
+
+    /* ── Loader & toast ── */
+    .loader { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 300; overflow: hidden; display: none; }
+    .loader.active { display: block; }
+    .loader::after { content: ''; position: absolute; inset: 0; width: 40%; background: white; animation: load 1s ease-in-out infinite; }
+    @keyframes load { from { transform: translateX(260%); } to { transform: translateX(-120%); } }
+    .toast { position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%); background: #111827; color: white; padding: 12px 20px; border-radius: 16px; font-size: 0.95rem; max-width: calc(100vw - 32px); width: max-content; text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; z-index: 400; }
+    .toast.show { opacity: 1; }
+    .boot { color: white; text-align: center; padding-top: 40vh; }
+  </style>
+</head>
+<body>
+
+<div class="boot" id="boot">טוען…</div>
+
+<!-- LOGIN -->
+<main id="login" class="screen">
+  <div class="login-title">🏦 בנק אמא ואבא</div>
+  <div class="login-sub">התחברו כדי להמשיך</div>
+  <form class="card" id="loginForm" autocomplete="on">
+    <div class="field">
+      <label for="loginUser">שם משתמש</label>
+      <input class="input ltr" id="loginUser" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="32" required>
+    </div>
+    <div class="field">
+      <label for="loginPass">סיסמה</label>
+      <input class="input ltr" id="loginPass" name="password" type="password" autocomplete="current-password" maxlength="72" required>
+    </div>
+    <button class="btn" type="submit" id="loginBtn">כניסה</button>
+  </form>
+</main>
+
+<!-- PARENT HOME -->
+<main id="parent" class="screen">
+  <div class="bar">
+    <h1>🏦 בנק אמא ואבא<small id="parentHello"></small></h1>
+    <button class="pill-btn" data-action="logout">יציאה</button>
+  </div>
+  <div class="kid-chips" id="kidChips"></div>
+  <div class="acc-row" id="parentAccs"></div>
+  <div class="big-actions">
+    <button class="btn red"   data-sheet="expense"><b>➖</b>הוצאה</button>
+    <button class="btn green" data-sheet="deposit"><b>➕</b>הפקדה / דמי כיס</button>
+  </div>
+  <div class="small-actions">
+    <button data-sheet="transfer">🔄 העברה</button>
+    <button data-sheet="interest">📈 ריבית</button>
+    <button data-sheet="adjust">✏️ תיקון יתרה</button>
+  </div>
+  <section class="card">
+    <h2><span id="recentTitle">פעולות אחרונות</span><button class="link-btn" data-action="log">📋 יומן מלא</button></h2>
+    <ul class="tx-list" id="recentList"></ul>
+  </section>
+</main>
+
+<!-- FULL AUDIT LOG -->
+<main id="log" class="screen">
+  <div class="bar">
+    <button class="pill-btn" data-action="back">→ חזרה</button>
+    <h1>🗂️ יומן פעולות</h1>
+  </div>
+  <div class="filter" id="logFilter"></div>
+  <section class="card">
+    <ul class="tx-list" id="logList"></ul>
+    <button class="btn ghost" id="logMore" style="margin-top:10px;display:none">טען עוד</button>
+  </section>
+</main>
+
+<!-- KID DASHBOARD -->
+<main id="kid" class="screen">
+  <div class="bar">
+    <h1 id="kidHello"></h1>
+    <button class="pill-btn" data-action="logout">יציאה</button>
+  </div>
+  <div class="kid-total"><div>סה״כ יש לי</div><div class="big" id="kidTotal"></div></div>
+  <div class="kid-accs" id="kidAccs"></div>
+  <section class="card">
+    <h2>📋 מה קרה בחשבון</h2>
+    <ul class="tx-list" id="kidList"></ul>
+  </section>
+</main>
+
+<!-- BOTTOM SHEET -->
+<div class="overlay" id="overlay"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <h3 id="sheetTitle"></h3>
+    <button class="x" type="button" data-action="close" aria-label="סגירה">✕</button>
+  </div>
+
+  <!-- Expense -->
+  <form id="f-expense" data-title="➖ הוצאה">
+    <div class="sheet-body">
+      <div class="field"><span class="lbl">סכום (₪)</span>
+        <input class="input amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" required></div>
+      <div class="field"><span class="lbl">מאיזה חשבון?</span><div class="seg" data-accounts="account" data-default="בזבוזים"></div></div>
+      <div class="field"><span class="lbl">סוג</span><div class="chips-wrap" data-chips="type"
+        data-options="🛒|קנייה,🍕|אוכל ושתיה,🎮|בילוי ופנאי,📚|ספרים וחינוך,👟|ביגוד והנעלה,✈️|טיולים,📦|אחר" data-default="קנייה"></div></div>
+      <div class="field"><label>תיאור</label>
+        <input class="input" name="desc" maxlength="100" placeholder="לדוגמה: משחק, ממתק..." required enterkeyhint="done"></div>
+    </div>
+    <div class="sheet-foot"><button class="btn red" type="submit">➖ רשום הוצאה</button></div>
+  </form>
+
+  <!-- Deposit / allowance -->
+  <form id="f-deposit" data-title="➕ הפקדה">
+    <div class="sheet-body">
+      <div class="row2" style="margin-bottom:6px">
+        <button class="btn green" type="button" data-action="weekly-one" id="weeklyOneBtn">📅 דמי כיס</button>
+        <button class="btn ghost" type="button" data-action="weekly-all">📅 לכל הילדים</button>
+      </div>
+      <p class="hint">דמי כיס שבועיים: 5 ₪ בזבוזים · 5 ₪ חסכון · 10 ₪ השקעה</p>
+      <div class="divider">או הפקדה מיוחדת</div>
+      <div class="field"><span class="lbl">סכום (₪)</span>
+        <input class="input amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0"></div>
+      <div class="field"><span class="lbl">לאיזה חשבון?</span><div class="seg" data-accounts="account" data-default="חסכון"></div></div>
+      <div class="field"><span class="lbl">סוג</span><div class="chips-wrap" data-chips="occasion"
+        data-options="🎁|מתנה,🎂|יום הולדת,🎉|חג,⭐|פרס,💎|בונוס,📦|אחר" data-default="מתנה"></div></div>
+      <div class="field"><label>תיאור (לא חובה)</label>
+        <input class="input" name="desc" maxlength="100" placeholder="לדוגמה: מתנת סבא וסבתא" enterkeyhint="done"></div>
+    </div>
+    <div class="sheet-foot"><button class="btn pink" type="submit">🎁 הפקד</button></div>
+  </form>
+
+  <!-- Transfer -->
+  <form id="f-transfer" data-title="🔄 העברה בין חשבונות">
+    <div class="sheet-body">
+      <div class="field"><span class="lbl">מחשבון</span><div class="seg" data-accounts="from" data-default="בזבוזים"></div></div>
+      <div class="field"><span class="lbl">לחשבון</span><div class="seg" data-accounts="to" data-default="חסכון"></div></div>
+      <div class="field"><span class="lbl">סכום (₪)</span>
+        <input class="input amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" required enterkeyhint="done"></div>
+    </div>
+    <div class="sheet-foot"><button class="btn blue" type="submit">🔄 העבר</button></div>
+  </form>
+
+  <!-- Interest -->
+  <form id="f-interest" data-title="📈 ריבית לחשבון השקעה">
+    <div class="sheet-body">
+      <div class="field"><span class="lbl">למי?</span><div class="seg" id="interestWho"></div></div>
+      <div class="field"><span class="lbl">סכום (₪)</span>
+        <input class="input amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" required></div>
+      <div class="field"><label>הערה (לא חובה)</label>
+        <input class="input" name="note" maxlength="100" placeholder="לדוגמה: ריבית חודשית" enterkeyhint="done"></div>
+    </div>
+    <div class="sheet-foot"><button class="btn amber" type="submit">📈 הוסף ריבית</button></div>
+  </form>
+
+  <!-- Adjust balances -->
+  <form id="f-adjust" data-title="✏️ תיקון יתרה">
+    <div class="sheet-body">
+      <p class="hint">קובע את היתרה המדויקת. ההפרש נרשם ביומן הפעולות.</p>
+      <div class="row3">
+        <div class="field"><label>🛍️ בזבוזים</label><input class="input" name="spending" inputmode="decimal" autocomplete="off"></div>
+        <div class="field"><label>🐷 חסכון</label><input class="input" name="savings" inputmode="decimal" autocomplete="off"></div>
+        <div class="field"><label>📈 השקעה</label><input class="input" name="invest" inputmode="decimal" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="sheet-foot"><button class="btn" type="submit">💾 שמור יתרה</button></div>
+  </form>
+</div>
+
+<div class="loader" id="loader"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module">
+/*
+ * SECURITY MODEL (OWASP Top 10 notes)
+ * ───────────────────────────────────
+ * A01 Access control: all enforced server-side in Supabase (see supabase/schema.sql).
+ *     Row Level Security lets parents read everything and each child only their own
+ *     rows. Tables have no write grants; every balance change goes through an
+ *     admin-only SECURITY DEFINER function that also appends to the audit log in
+ *     the same DB transaction. The log is append-only (no UPDATE/DELETE possible);
+ *     undo appends a reversing entry.
+ * A02 Crypto: HTTPS only (GitHub Pages + Supabase). Passwords are handled by
+ *     Supabase Auth (bcrypt); nothing secret lives in this file. The publishable
+ *     key below is designed to be public.
+ * A03 Injection/XSS: user text goes through sanitize() or textContent; CSP meta tag.
+ * A04 Design: amounts validated client-side AND server-side; balance can't go negative.
+ * A05 Misconfiguration: GitHub Pages can't set HTTP headers, and browsers ignore
+ *     X-Frame-Options / frame-ancestors in <meta>, so framing is blocked in JS below.
+ * A06 Components: supabase-js pinned to an exact version.
+ * A07 Auth: Supabase Auth sessions (stored in localStorage so phones stay logged in;
+ *     use "יציאה" on shared devices). Supabase rate-limits sign-in attempts.
+ * A09 Logging: every movement records server time and auth.uid() as entered_by.
+ */
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm';
+
+if (window.top !== window.self) { document.body.innerHTML = ''; throw new Error('framed'); }
+
+// ── CONFIG ───────────────────────────────────────────────
+const SUPABASE_URL = 'https://tpnfzwkywipiclxozimb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_IIFwQYf4XomXK7e7mpoALg_YycZtWZg'; // public by design; RLS protects data
+const LOGIN_DOMAIN = '@bomd.local';
+
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'bomd-auth' }
+});
+
+const ACCOUNTS = [
+  { key: 'בזבוזים', col: 'spending', icon: '🛍️', cls: 'spending', desc: 'לקניות ושמחות' },
+  { key: 'חסכון',   col: 'savings',  icon: '🐷', cls: 'savings',  desc: 'לחיסכון לעתיד' },
+  { key: 'השקעה',   col: 'invest',   icon: '📈', cls: 'invest',   desc: 'גדל עם הזמן!' },
+];
+const MAX_AMOUNT = 99_999;
+const PAGE = 50;
+
+// ── STATE ────────────────────────────────────────────────
+const S = {
+  profile: null,      // { id, username, display_name, role, child_id }
+  children: [],       // [{ id, name, avatar }]
+  balances: {},       // childId -> { spending, savings, invest }
+  selected: null,     // selected child id (parent view)
+  logFilter: 'all',
+  logOffset: 0,
+};
+
+// ── HELPERS ──────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function sanitize(str) {
+  return String(str ?? '').replace(/[&<>"'`]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' })[c]);
+}
+function sliceStr(str, max = 100) { return String(str ?? '').trim().slice(0, max); }
+function parseAmt(val) {
+  const n = parseFloat(String(val ?? '').replace(',', '.').replace(/[^\d.]/g, ''));
+  if (!isFinite(n) || n <= 0 || n > MAX_AMOUNT) return NaN;
+  return Math.round(n * 100) / 100;
+}
+function parseBal(val) {
+  const s = String(val ?? '').trim();
+  if (s === '') return 0;
+  const n = parseFloat(s.replace(',', '.'));
+  if (!isFinite(n) || n < 0 || n > MAX_AMOUNT) return NaN;
+  return Math.round(n * 100) / 100;
+}
+const fmt = n => Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = n => `${fmt(n)} ₪`;
+const fmtDT = iso => new Date(iso).toLocaleString('he-IL', {
+  timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'
+});
+const totalOf = b => b ? Number(b.spending) + Number(b.savings) + Number(b.invest) : 0;
+const childById = id => S.children.find(c => c.id === id);
+
+let loadCount = 0;
+function loading(on) { loadCount += on ? 1 : -1; $('loader').classList.toggle('active', loadCount > 0); }
+
+let toastTimer;
+function toast(msg, ms = 2800) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+function errMsg(e) {
+  const m = e?.message || String(e);
+  if (/fetch|network/i.test(m)) return 'אין חיבור לשרת';
+  if (/JWT|session|auth/i.test(m)) return 'החיבור פג — התחברו שוב';
+  return m;
+}
+async function q(promise) {
+  const { data, error } = await promise;
+  if (error) throw error;
+  return data;
+}
+/** Run an async action with button lock + loader + error toast. */
+async function run(btn, fn) {
+  if (btn) btn.disabled = true;
+  loading(true);
+  try { return await fn(); }
+  catch (e) { console.error(e); toast('❌ ' + errMsg(e), 4000); }
+  finally { if (btn) btn.disabled = false; loading(false); }
+}
+/** Two-tap confirm for risky one-tap actions. Returns true on the 2nd tap. */
+function confirmTap(btn, label = 'לחצו שוב לאישור') {
+  if (btn.classList.contains('confirming')) {
+    btn.classList.remove('confirming');
+    btn.textContent = btn.dataset.orig;
+    return true;
+  }
+  btn.dataset.orig = btn.textContent;
+  btn.classList.add('confirming');
+  btn.textContent = label;
+  setTimeout(() => {
+    if (btn.classList.contains('confirming')) { btn.classList.remove('confirming'); btn.textContent = btn.dataset.orig; }
+  }, 3500);
+  return false;
+}
+
+function showScreen(id) {
+  $('boot').style.display = 'none';
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  window.scrollTo(0, 0);
+}
+
+// ── DATA ─────────────────────────────────────────────────
+async function loadChildrenAndBalances() {
+  const [children, balances] = await Promise.all([
+    q(sb.from('children').select('id,name,avatar').order('sort').order('id')),
+    q(sb.from('balances').select('child_id,spending,savings,invest')),
+  ]);
+  S.children = children;
+  S.balances = Object.fromEntries(balances.map(b => [b.child_id, b]));
+}
+async function refreshBalances() {
+  const balances = await q(sb.from('balances').select('child_id,spending,savings,invest'));
+  S.balances = Object.fromEntries(balances.map(b => [b.child_id, b]));
+}
+async function fetchTx({ child = 'all', from = 0, limit = PAGE } = {}) {
+  let query = sb.from('transactions')
+    .select('id,group_id,child_id,account,amount,type,description,created_at,reverses_group,by:profiles(display_name)')
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + limit - 1);
+  if (child !== 'all') query = query.eq('child_id', child);
+  const rows = await q(query);
+  // Which of these groups have already been reversed?
+  const groups = [...new Set(rows.map(r => r.group_id))];
+  let reversed = new Set();
+  if (S.profile.role === 'admin' && groups.length) {
+    const rev = await q(sb.from('transactions').select('reverses_group').in('reverses_group', groups));
+    reversed = new Set(rev.map(r => r.reverses_group));
+  }
+  return rows.map(r => ({ ...r, isReversed: reversed.has(r.group_id) }));
+}
+
+// ── RENDER: transactions ─────────────────────────────────
+function badgeCls(type, amount) {
+  if (type === 'ריבית') return 'b-int';
+  if (type === 'העברה') return 'b-xfer';
+  if (type === 'דמי כיס') return 'b-dep';
+  if (type === 'תיקון יתרה' || type === 'ביטול') return 'b-adj';
+  if (['מתנה', 'יום הולדת', 'חג', 'פרס', 'בונוס'].includes(type)) return 'b-gift';
+  return amount > 0 ? 'b-dep' : 'b-exp';
+}
+function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = false, append = false } = {}) {
+  if (!append) ul.innerHTML = '';
+  if (!rows.length && !append) {
+    ul.innerHTML = '<li class="empty">עדיין אין פעולות 🙂</li>';
+    return;
+  }
+  for (const tx of rows) {
+    const amt = Number(tx.amount);
+    const cls = tx.type === 'העברה' ? 'xfer' : amt > 0 ? 'pos' : 'neg';
+    const child = childById(tx.child_id);
+    const meta = [
+      `<span class="badge ${badgeCls(tx.type, amt)}">${sanitize(tx.type)}</span>`,
+      showChild && child ? `<span>${sanitize(child.avatar)} ${sanitize(child.name)}</span>` : '',
+      `<span>${sanitize(tx.account)}</span>`,
+      `<span>${sanitize(fmtDT(tx.created_at))}</span>`,
+      showWho && tx.by?.display_name ? `<span>ע״י ${sanitize(tx.by.display_name)}</span>` : '',
+    ].filter(Boolean).join('');
+    const undoable = canUndo && !tx.isReversed && !tx.reverses_group;
+    const li = document.createElement('li');
+    li.className = 'tx' + (tx.isReversed ? ' reversed' : '');
+    li.innerHTML = `
+      <div class="tx-main">
+        <div class="tx-desc">${sanitize(tx.description)}</div>
+        <div class="tx-meta">${meta}${tx.isReversed ? '<span>· בוטל</span>' : ''}</div>
+      </div>
+      <div class="tx-side">
+        <div class="tx-amt ${cls}">${amt > 0 ? '+' : '−'}${sanitize(fmt(Math.abs(amt)))} ₪</div>
+        ${undoable ? `<button class="undo" type="button" data-undo="${sanitize(tx.group_id)}">↩️ ביטול</button>` : ''}
+      </div>`;
+    ul.appendChild(li);
+  }
+}
+
+// ── LOGIN ────────────────────────────────────────────────
+$('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const user = sliceStr($('loginUser').value, 32).toLowerCase();
+  const pass = $('loginPass').value;
+  if (!/^[a-z0-9._-]+$/.test(user)) { toast('⚠️ שם משתמש באותיות לועזיות'); return; }
+  run($('loginBtn'), async () => {
+    const { error } = await sb.auth.signInWithPassword({ email: user + LOGIN_DOMAIN, password: pass });
+    if (error) { toast('❌ שם משתמש או סיסמה שגויים'); $('loginPass').value = ''; return; }
+    $('loginPass').value = '';
+    await enter();
+  });
+});
+
+async function logout() {
+  await run(null, () => sb.auth.signOut());
+  S.profile = null; S.children = []; S.balances = {}; S.selected = null;
+  showScreen('login');
+}
+
+/** After a session exists: load profile and route by role. */
+async function enter() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) { showScreen('login'); return; }
+  const profile = await q(sb.from('profiles').select('id,username,display_name,role,child_id').eq('id', user.id).maybeSingle());
+  if (!profile) {
+    toast('❌ המשתמש לא הוגדר במערכת', 4000);
+    await sb.auth.signOut();
+    showScreen('login');
+    return;
+  }
+  S.profile = profile;
+  await loadChildrenAndBalances();
+  if (profile.role === 'admin') {
+    try { S.selected = localStorage.getItem('bomd-selected'); } catch {}
+    if (!childById(S.selected)) S.selected = S.children[0]?.id ?? null;
+    $('parentHello').textContent = `שלום ${profile.display_name}`;
+    buildSheetControls();
+    await showParent();
+  } else {
+    await showKid();
+  }
+}
+
+// ── PARENT HOME ──────────────────────────────────────────
+function renderParentTop() {
+  const chips = $('kidChips');
+  chips.innerHTML = '';
+  for (const c of S.children) {
+    const b = document.createElement('button');
+    b.className = 'kid-chip';
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(c.id === S.selected));
+    b.innerHTML = `<div class="av">${sanitize(c.avatar)}</div><div class="nm">${sanitize(c.name)}</div><div class="tt">${sanitize(money(totalOf(S.balances[c.id])))}</div>`;
+    b.onclick = () => selectChild(c.id);
+    chips.appendChild(b);
+  }
+  const bal = S.balances[S.selected] || {};
+  $('parentAccs').innerHTML = ACCOUNTS.map(a => `
+    <div class="acc ${a.cls}"><div class="ic">${a.icon}</div><div class="lb">${sanitize(a.key)}</div>
+    <div class="am">${sanitize(money(bal[a.col]))}</div></div>`).join('');
+  const c = childById(S.selected);
+  $('recentTitle').textContent = c ? `פעולות אחרונות — ${c.name}` : 'פעולות אחרונות';
+}
+async function renderRecent() {
+  if (!S.selected) { renderTxList($('recentList'), []); return; }
+  const rows = await fetchTx({ child: S.selected, limit: 10 });
+  renderTxList($('recentList'), rows, { showWho: true, canUndo: true });
+}
+async function showParent() {
+  showScreen('parent');
+  renderParentTop();
+  await run(null, renderRecent);
+}
+function selectChild(id) {
+  S.selected = id;
+  try { localStorage.setItem('bomd-selected', id); } catch {}
+  renderParentTop();
+  run(null, renderRecent);
+}
+/** Called after every successful write. */
+async function afterWrite(msg) {
+  toast(msg);
+  await refreshBalances();
+  renderParentTop();
+  await renderRecent();
+  if ($('log').classList.contains('active')) await loadLog(true);
+}
+
+// ── FULL LOG ─────────────────────────────────────────────
+function renderLogFilter() {
+  const f = $('logFilter');
+  f.innerHTML = '';
+  for (const opt of [{ id: 'all', name: 'הכל', avatar: '' }, ...S.children]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = `${opt.avatar} ${opt.name}`.trim();
+    b.setAttribute('aria-pressed', String(opt.id === S.logFilter));
+    b.onclick = () => { S.logFilter = opt.id; renderLogFilter(); run(null, () => loadLog(true)); };
+    f.appendChild(b);
+  }
+}
+async function loadLog(reset) {
+  if (reset) S.logOffset = 0;
+  const rows = await fetchTx({ child: S.logFilter, from: S.logOffset, limit: PAGE });
+  renderTxList($('logList'), rows, { showChild: true, showWho: true, canUndo: true, append: !reset });
+  S.logOffset += rows.length;
+  $('logMore').style.display = rows.length === PAGE ? 'flex' : 'none';
+}
+async function showLog() {
+  history.pushState({ screen: 'log' }, '');
+  showScreen('log');
+  renderLogFilter();
+  await run(null, () => loadLog(true));
+}
+$('logMore').onclick = () => run($('logMore'), () => loadLog(false));
+
+// ── KID DASHBOARD ────────────────────────────────────────
+async function showKid() {
+  const c = childById(S.profile.child_id) || { name: S.profile.display_name, avatar: '🙂' };
+  const bal = S.balances[S.profile.child_id] || {};
+  $('kidHello').textContent = `היי ${c.name}! ${c.avatar}`;
+  $('kidTotal').textContent = money(totalOf(bal));
+  $('kidAccs').innerHTML = ACCOUNTS.map(a => `
+    <div class="acc ${a.cls}"><div class="ic">${a.icon}</div>
+      <div><div class="lb">${sanitize(a.key)}</div><div class="ds">${sanitize(a.desc)}</div></div>
+      <div class="am">${sanitize(money(bal[a.col]))}</div></div>`).join('');
+  showScreen('kid');
+  await run(null, async () => {
+    const rows = await fetchTx({ child: S.profile.child_id, limit: 100 });
+    renderTxList($('kidList'), rows);
+  });
+}
+
+// ── BOTTOM SHEET ─────────────────────────────────────────
+function buildSheetControls() {
+  // Account segmented controls
+  document.querySelectorAll('[data-accounts]').forEach(el => {
+    const name = el.dataset.accounts;
+    el.innerHTML = ACCOUNTS.map(a => `
+      <label><input type="radio" name="${name}" value="${sanitize(a.key)}" ${a.key === el.dataset.default ? 'checked' : ''}>
+      <span><b>${a.icon}</b>${sanitize(a.key)}</span></label>`).join('');
+  });
+  // Type / occasion chips
+  document.querySelectorAll('[data-chips]').forEach(el => {
+    const name = el.dataset.chips;
+    el.innerHTML = el.dataset.options.split(',').map(o => {
+      const [icon, val] = o.split('|');
+      return `<label><input type="radio" name="${name}" value="${sanitize(val)}" ${val === el.dataset.default ? 'checked' : ''}>
+        <span>${icon} ${sanitize(val)}</span></label>`;
+    }).join('');
+  });
+}
+function resetForm(form) {
+  form.reset();  // restores the default-checked radios
+}
+let sheetOpen = null;
+function openSheet(kind) {
+  if (!S.selected && kind !== 'interest') { toast('⚠️ בחרו ילד/ה'); return; }
+  const form = $('f-' + kind);
+  const c = childById(S.selected);
+  document.querySelectorAll('.sheet form').forEach(f => f.classList.toggle('active', f === form));
+  $('sheetTitle').textContent = kind === 'interest' ? form.dataset.title : `${form.dataset.title} — ${c.name} ${c.avatar}`;
+
+  if (kind === 'deposit') $('weeklyOneBtn').textContent = `📅 דמי כיס ל${c.name}`;
+  if (kind === 'interest') {
+    $('interestWho').innerHTML = [
+      `<label><input type="radio" name="who" value="${sanitize(S.selected)}" checked><span><b>${sanitize(c.avatar)}</b>${sanitize(c.name)}</span></label>`,
+      `<label><input type="radio" name="who" value="all"><span><b>👨‍👩‍👧‍👦</b>כולם</span></label>`,
+    ].join('');
+  }
+  if (kind === 'adjust') {
+    const b = S.balances[S.selected] || {};
+    form.spending.value = Number(b.spending || 0);
+    form.savings.value  = Number(b.savings  || 0);
+    form.invest.value   = Number(b.invest   || 0);
+  }
+  sheetOpen = kind;
+  $('overlay').classList.add('open');
+  $('sheet').classList.add('open');
+  history.pushState({ sheet: kind }, '');
+  // Focus the amount field for the fast path (opens numeric keypad on phones)
+  const amt = form.querySelector('[name="amount"]');
+  if (amt && kind !== 'deposit') setTimeout(() => amt.focus({ preventScroll: true }), 260);
+}
+function hideSheet() {
+  if (!sheetOpen) return;
+  const form = $('f-' + sheetOpen);
+  document.activeElement?.blur?.();
+  $('overlay').classList.remove('open');
+  $('sheet').classList.remove('open');
+  sheetOpen = null;
+  setTimeout(() => resetForm(form), 260);
+}
+function closeSheet() {
+  if (history.state?.sheet) history.back(); else hideSheet();
+}
+window.addEventListener('popstate', () => {
+  if (sheetOpen) { hideSheet(); return; }
+  if ($('log').classList.contains('active')) showParent();
+});
+$('overlay').onclick = closeSheet;
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen) closeSheet(); });
+
+// Keep the sheet above the on-screen keyboard (iOS Safari doesn't resize the layout viewport).
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const onVV = () => {
+    const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--kb', kb + 'px');
+    document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+  };
+  vv.addEventListener('resize', onVV);
+  vv.addEventListener('scroll', onVV);
+  onVV();
+}
+
+// ── WRITE ACTIONS (all via server functions) ─────────────
+const childName = id => childById(id)?.name ?? '';
+
+$('f-expense').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const amount = parseAmt(fd.get('amount'));
+  const desc = sliceStr(fd.get('desc'));
+  if (isNaN(amount)) { toast('⚠️ הכניסו סכום תקין'); f.amount.focus(); return; }
+  if (!desc) { toast('⚠️ הוסיפו תיאור'); f.desc.focus(); return; }
+  const child = S.selected, acc = fd.get('account');
+  run(e.submitter, async () => {
+    await q(sb.rpc('add_expense', { p_child: child, p_account: acc, p_type: fd.get('type'), p_amount: amount, p_desc: desc }));
+    closeSheet();
+    await afterWrite(`✅ נרשמה הוצאה של ${money(amount)} ל${childName(child)}`);
+  });
+});
+
+$('f-deposit').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const amount = parseAmt(fd.get('amount'));
+  if (isNaN(amount)) { toast('⚠️ הכניסו סכום תקין'); f.amount.focus(); return; }
+  const child = S.selected;
+  run(e.submitter, async () => {
+    await q(sb.rpc('add_deposit', {
+      p_child: child, p_account: fd.get('account'), p_occasion: fd.get('occasion'),
+      p_amount: amount, p_desc: sliceStr(fd.get('desc')),
+    }));
+    closeSheet();
+    await afterWrite(`✅ הופקדו ${money(amount)} ל${childName(child)}`);
+  });
+});
+
+async function weekly(btn, target) {
+  await run(btn, async () => {
+    await q(sb.rpc('weekly_allowance', { p_child: target }));
+    closeSheet();
+    await afterWrite(target === 'all' ? '✅ דמי כיס הופקדו לכולם!' : `✅ דמי כיס הופקדו ל${childName(target)}!`);
+  });
+}
+
+$('f-transfer').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const amount = parseAmt(fd.get('amount'));
+  const from = fd.get('from'), to = fd.get('to');
+  if (from === to) { toast('⚠️ בחרו שני חשבונות שונים'); return; }
+  if (isNaN(amount)) { toast('⚠️ הכניסו סכום תקין'); f.amount.focus(); return; }
+  const child = S.selected;
+  run(e.submitter, async () => {
+    await q(sb.rpc('transfer', { p_child: child, p_from: from, p_to: to, p_amount: amount }));
+    closeSheet();
+    await afterWrite(`✅ הועברו ${money(amount)} מ${from} ל${to}`);
+  });
+});
+
+$('f-interest').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const amount = parseAmt(fd.get('amount'));
+  if (isNaN(amount)) { toast('⚠️ הכניסו סכום תקין'); f.amount.focus(); return; }
+  const who = fd.get('who');
+  run(e.submitter, async () => {
+    await q(sb.rpc('add_interest', { p_child: who, p_amount: amount, p_note: sliceStr(fd.get('note')) }));
+    closeSheet();
+    await afterWrite(who === 'all' ? '✅ ריבית נוספה לכולם!' : `✅ ריבית נוספה ל${childName(who)}!`);
+  });
+});
+
+$('f-adjust').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const sp = parseBal(f.spending.value), sv = parseBal(f.savings.value), inv = parseBal(f.invest.value);
+  if ([sp, sv, inv].some(isNaN)) { toast('⚠️ יתרה לא תקינה (0 – 99,999)'); return; }
+  const child = S.selected;
+  run(e.submitter, async () => {
+    await q(sb.rpc('set_balances', { p_child: child, p_spending: sp, p_savings: sv, p_invest: inv }));
+    closeSheet();
+    await afterWrite(`✅ היתרה של ${childName(child)} עודכנה`);
+  });
+});
+
+async function undo(btn) {
+  if (!confirmTap(btn, 'בטוח? לחצו שוב')) return;
+  await run(btn, async () => {
+    await q(sb.rpc('reverse_entry', { p_group: btn.dataset.undo }));
+    await afterWrite('↩️ הפעולה בוטלה ונרשמה ביומן');
+  });
+}
+
+// ── EVENT DELEGATION ─────────────────────────────────────
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-sheet],[data-action],[data-undo]');
+  if (!el) return;
+  if (el.dataset.sheet) return openSheet(el.dataset.sheet);
+  if (el.dataset.undo) return undo(el);
+  switch (el.dataset.action) {
+    case 'logout': return logout();
+    case 'log':    return showLog();
+    case 'back':   return history.state?.screen === 'log' ? history.back() : showParent();
+    case 'close':  return closeSheet();
+    case 'weekly-one': return weekly(el, S.selected);
+    case 'weekly-all': if (confirmTap(el)) weekly(el, 'all'); return;
+  }
+});
+
+// ── START ────────────────────────────────────────────────
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT' && S.profile) { S.profile = null; showScreen('login'); }
+});
+(async () => {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await enter(); else showScreen('login');
+  } catch (e) {
+    console.error(e);
+    showScreen('login');
+    toast('❌ ' + errMsg(e), 4000);
+  }
+})();
+</script>
+</body>
+</html>
