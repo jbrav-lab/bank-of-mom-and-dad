@@ -13,7 +13,7 @@ A small family app for tracking the kids' pocket money (spending, savings and in
 - The Supabase *publishable* key in `index.html` is meant to be public. The data is protected by RLS.
 
 ## One-time setup
-1. **Supabase → SQL Editor:** run `supabase/schema.sql`, then `supabase/002-allowance-passwords.sql`, then `supabase/003-separate-allowance-deposits.sql`.
+1. **Supabase → SQL Editor:** run `supabase/schema.sql`, then `supabase/002-allowance-passwords.sql`, then `supabase/003-separate-allowance-deposits.sql`, then `supabase/004-cancellation-note-visibility.sql`.
 2. **Supabase → Authentication → Sign In / Providers → Email:** turn off *Confirm email*. You can also turn off *Allow new users to sign up*, because users are created by hand.
 3. **Supabase → Authentication → Users → Add user → Create new user:** create one user per person, such as `parent1@bomd.local`, with *Auto Confirm User* ticked.
 4. Copy `supabase/seed.example.sql` to `supabase/seed.local.sql`, which git ignores. Fill in the real names and usernames, then run it in the SQL Editor. Its last query should show a `profile_id` for every user.

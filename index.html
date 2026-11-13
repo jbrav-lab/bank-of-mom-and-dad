@@ -128,6 +128,10 @@
     .undo { border: 1px solid #e5e7eb; background: white; border-radius: 50px; font-size: 0.78rem; padding: 0 10px; min-height: 32px; color: #555; white-space: nowrap; }
     .undo.confirming { background: #111827; color: white; border-color: #111827; }
     .reversed .tx-desc, .reversed .tx-amt { text-decoration: line-through; opacity: 0.55; }
+    .tx-note { font-size: 0.85rem; color: #4b5563; background: #f9fafb; border-radius: 8px; padding: 4px 8px; margin-top: 4px; word-break: break-word; }
+    .undo-summary { background: #f9fafb; border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 0.95rem; }
+    .undo-summary div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+    .undo-summary b { direction: ltr; white-space: nowrap; }
     .empty { text-align: center; color: #aaa; padding: 18px 0; }
     .badge { display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
     .b-exp { background: #fee2e2; color: #dc2626; } .b-dep { background: #dcfce7; color: #16a34a; }
@@ -381,6 +385,18 @@
     <div class="sheet-foot"><button class="btn" type="submit">💾 שמור יתרה</button></div>
   </form>
 
+  <!-- Cancel (undo) an entry -->
+  <form id="f-undo" data-title="↩️ ביטול פעולה">
+    <div class="sheet-body">
+      <div class="undo-summary" id="undoSummary"></div>
+      <div class="field"><label>הסבר לביטול (לא חובה)</label>
+        <input class="input" name="note" maxlength="200" placeholder="לדוגמה: נרשם בטעות פעמיים" enterkeyhint="done"></div>
+      <label class="toggle"><input type="checkbox" name="show" checked> 👀 להציג את הביטול לילד/ה</label>
+      <p class="hint" id="undoHint"></p>
+    </div>
+    <div class="sheet-foot"><button class="btn red" type="submit">↩️ בטל פעולה</button></div>
+  </form>
+
   <!-- Change my password -->
   <form id="f-password" data-title="🔑 החלפת סיסמה" autocomplete="on">
     <div class="sheet-body">
@@ -556,19 +572,19 @@ async function refreshBalances() {
 }
 async function fetchTx({ child = 'all', from = 0, limit = PAGE } = {}) {
   let query = sb.from('transactions')
-    .select('id,group_id,child_id,account,amount,type,description,created_at,reverses_group,auto,by:profiles(display_name)')
+    .select('id,group_id,child_id,account,amount,type,description,note,hidden_from_child,created_at,reverses_group,auto,by:profiles(display_name)')
     .order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(from, from + limit - 1);
   if (child !== 'all') query = query.eq('child_id', child);
   const rows = await q(query);
-  // Which of these groups have already been reversed?
+  // Which of these groups have already been cancelled (and was it hidden from the child)?
   const groups = [...new Set(rows.map(r => r.group_id))];
-  let reversed = new Set();
-  if (S.profile.role === 'admin' && groups.length) {
-    const rev = await q(sb.from('transactions').select('reverses_group').in('reverses_group', groups));
-    reversed = new Set(rev.map(r => r.reverses_group));
+  const reversed = new Map();   // group_id -> hidden_from_child
+  if (groups.length) {
+    const rev = await q(sb.from('transactions').select('reverses_group,hidden_from_child').in('reverses_group', groups));
+    for (const r of rev) reversed.set(r.reverses_group, r.hidden_from_child);
   }
-  return rows.map(r => ({ ...r, isReversed: reversed.has(r.group_id) }));
+  return rows.map(r => ({ ...r, isReversed: reversed.has(r.group_id), reversalHidden: reversed.get(r.group_id) === true }));
 }
 
 // ── RENDER: transactions ─────────────────────────────────
@@ -580,6 +596,10 @@ function badgeCls(type, amount) {
   if (['מתנה', 'יום הולדת', 'חג', 'פרס', 'בונוס'].includes(type)) return 'b-gift';
   return amount > 0 ? 'b-dep' : 'b-exp';
 }
+const NOT_EXPENSE = ['העברה', 'תיקון יתרה', 'ביטול'];
+const isExpense = tx => Number(tx.amount) < 0 && !NOT_EXPENSE.includes(tx.type);
+const txByGroup = new Map();   // group_id -> rows (for the cancel sheet summary)
+
 function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = false, append = false } = {}) {
   if (!append) ul.innerHTML = '';
   if (!rows.length && !append) {
@@ -587,16 +607,25 @@ function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = 
     return;
   }
   for (const tx of rows) {
+    const grp = txByGroup.get(tx.group_id) || [];
+    if (!grp.some(r => r.id === tx.id)) grp.push(tx);
+    txByGroup.set(tx.group_id, grp);
+
     const amt = Number(tx.amount);
     const cls = tx.type === 'העברה' ? 'xfer' : amt > 0 ? 'pos' : 'neg';
     const child = childById(tx.child_id);
+    const who = !showWho ? ''
+      : tx.auto ? '<span>🤖 אוטומטי</span>'
+      : tx.by?.display_name
+        ? `<span>${isExpense(tx) ? 'הוצאה אושרה ע״י' : 'ע״י'} ${sanitize(tx.by.display_name)}</span>` : '';
     const meta = [
       `<span class="badge ${badgeCls(tx.type, amt)}">${sanitize(tx.type)}</span>`,
       showChild && child ? `<span>${sanitize(child.avatar)} ${sanitize(child.name)}</span>` : '',
       `<span>${sanitize(tx.account)}</span>`,
       `<span>${sanitize(fmtDT(tx.created_at))}</span>`,
-      showWho && tx.auto ? '<span>🤖 אוטומטי</span>'
-        : showWho && tx.by?.display_name ? `<span>ע״י ${sanitize(tx.by.display_name)}</span>` : '',
+      who,
+      tx.isReversed ? `<span>· בוטל${tx.reversalHidden && showWho ? ' (מוסתר מהילד/ה)' : ''}</span>` : '',
+      tx.hidden_from_child && showWho ? '<span class="badge b-adj">🙈 מוסתר מהילד/ה</span>' : '',
     ].filter(Boolean).join('');
     const undoable = canUndo && !tx.isReversed && !tx.reverses_group;
     const li = document.createElement('li');
@@ -604,7 +633,8 @@ function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = 
     li.innerHTML = `
       <div class="tx-main">
         <div class="tx-desc">${sanitize(tx.description)}</div>
-        <div class="tx-meta">${meta}${tx.isReversed ? '<span>· בוטל</span>' : ''}</div>
+        ${tx.note ? `<div class="tx-note">📝 ${sanitize(tx.note)}</div>` : ''}
+        <div class="tx-meta">${meta}</div>
       </div>
       <div class="tx-side">
         <div class="tx-amt ${cls}">${amt > 0 ? '+' : '−'}${sanitize(fmt(Math.abs(amt)))} ₪</div>
@@ -775,7 +805,7 @@ function resetForm(form) {
 }
 let sheetOpen = null;
 function openSheet(kind) {
-  const noChild = kind === 'interest' || kind === 'password';
+  const noChild = kind === 'interest' || kind === 'password' || kind === 'undo';
   if (!S.selected && !noChild) { toast('⚠️ בחרו ילד/ה'); return; }
   const form = $('f-' + kind);
   const c = childById(S.selected);
@@ -1029,13 +1059,36 @@ $('resetForm').addEventListener('submit', e => {
   });
 });
 
-async function undo(btn) {
-  if (!confirmTap(btn, 'בטוח? לחצו שוב')) return;
-  await run(btn, async () => {
-    await q(sb.rpc('reverse_entry', { p_group: btn.dataset.undo }));
-    await afterWrite('↩️ הפעולה בוטלה ונרשמה ביומן');
-  });
+// ── CANCEL (UNDO) ────────────────────────────────────────
+let undoGroup = null;
+function updateUndoHint() {
+  const show = $('f-undo').show.checked;
+  $('undoHint').textContent = show
+    ? 'הילד/ה יראה/תראה את הפעולה המקורית מחוקה, את הביטול ואת ההסבר.'
+    : '🙈 הילד/ה לא יראה/תראה את הפעולה המקורית ולא את הביטול. היתרה תתעדכן בכל מקרה.';
 }
+$('f-undo').show.addEventListener('change', updateUndoHint);
+function undo(btn) {
+  undoGroup = btn.dataset.undo;
+  const rows = txByGroup.get(undoGroup) || [];
+  const c = childById(rows[0]?.child_id);
+  $('undoSummary').innerHTML =
+    (c ? `<div><span>${sanitize(c.avatar)} ${sanitize(c.name)}</span></div>` : '') +
+    rows.map(r => `<div><span>${sanitize(r.description)} · ${sanitize(r.account)}</span>
+      <b>${Number(r.amount) > 0 ? '+' : '−'}${sanitize(fmt(Math.abs(Number(r.amount))))} ₪</b></div>`).join('');
+  openSheet('undo');
+  updateUndoHint();
+}
+$('f-undo').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const group = undoGroup, note = sliceStr(f.note.value, 200), show = f.show.checked;
+  run(e.submitter, async () => {
+    await q(sb.rpc('reverse_entry', { p_group: group, p_note: note || null, p_show_child: show }));
+    closeSheet();
+    await afterWrite(show ? '↩️ הפעולה בוטלה ונרשמה ביומן' : '↩️ הפעולה בוטלה (מוסתרת מהילד/ה)');
+  });
+});
 
 // ── EVENT DELEGATION ─────────────────────────────────────
 document.addEventListener('click', e => {
