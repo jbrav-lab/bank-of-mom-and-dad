@@ -129,6 +129,11 @@
     .undo.confirming { background: #111827; color: white; border-color: #111827; }
     .reversed .tx-desc, .reversed .tx-amt { text-decoration: line-through; opacity: 0.55; }
     .tx-note { font-size: 0.85rem; color: #4b5563; background: #f9fafb; border-radius: 8px; padding: 4px 8px; margin-top: 4px; word-break: break-word; }
+    .editor-other { font-weight: 800; font-style: italic; color: #111827; }
+    .hist-btn { background: #eef0fd; color: #3f3fae; border: none; border-radius: 20px; font-size: 0.75rem; padding: 2px 8px; min-height: 26px; }
+    .tx-hist { margin-top: 6px; border-inline-start: 3px solid #c7d2fe; padding: 2px 10px; font-size: 0.8rem; color: #4b5563; }
+    .tx-hist .h-item { padding: 4px 0; }
+    .tx-hist .h-item + .h-item { border-top: 1px dashed #e5e7eb; }
     .undo-summary { background: #f9fafb; border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 0.95rem; }
     .undo-summary div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
     .undo-summary b { direction: ltr; white-space: nowrap; }
@@ -385,6 +390,23 @@
     <div class="sheet-foot"><button class="btn" type="submit">💾 שמור יתרה</button></div>
   </form>
 
+  <!-- Edit an entry -->
+  <form id="f-edit" data-title="✏️ עריכת פעולה">
+    <div class="sheet-body">
+      <div class="undo-summary" id="editSummary"></div>
+      <div class="field"><span class="lbl">סכום (₪)</span>
+        <input class="input amount" name="amount" inputmode="decimal" autocomplete="off" required></div>
+      <div class="field"><span class="lbl">חשבון</span><div class="seg" data-accounts="account" data-default="בזבוזים"></div></div>
+      <div class="field" id="editTypeField"><span class="lbl">סוג</span><div class="chips-wrap" id="editTypes"></div></div>
+      <div class="field"><label>תיאור</label>
+        <input class="input" name="desc" maxlength="120" required></div>
+      <div class="field"><label>סיבת העריכה (לא חובה)</label>
+        <input class="input" name="note" maxlength="200" placeholder="לדוגמה: הסכום נרשם לא נכון" enterkeyhint="done"></div>
+      <p class="hint">הפעולה המקורית נשמרת ביומן, יחד עם כל שינוי: מי ערך, מתי ומה השתנה.</p>
+    </div>
+    <div class="sheet-foot"><button class="btn" type="submit">💾 שמור שינויים</button></div>
+  </form>
+
   <!-- Cancel (undo) an entry -->
   <form id="f-undo" data-title="↩️ ביטול פעולה">
     <div class="sheet-body">
@@ -465,6 +487,7 @@ const S = {
   children: [],       // [{ id, name, avatar }]
   balances: {},       // childId -> { spending, savings, invest }
   allowance: {},      // childId -> { spending, savings, invest, auto_active }
+  names: {},          // profile id -> display name (parents only)
   selected: null,     // selected child id (parent view)
   logFilter: 'all',
   logOffset: 0,
@@ -571,8 +594,8 @@ async function refreshBalances() {
   S.balances = Object.fromEntries(balances.map(b => [b.child_id, b]));
 }
 async function fetchTx({ child = 'all', from = 0, limit = PAGE } = {}) {
-  let query = sb.from('transactions')
-    .select('id,group_id,child_id,account,amount,type,description,note,hidden_from_child,created_at,reverses_group,auto,by:profiles(display_name)')
+  let query = sb.from('transactions_current')
+    .select('id,group_id,child_id,account,amount,type,description,note,hidden_from_child,created_at,reverses_group,auto,entered_by,last_edited_by,last_edited_at,edit_count')
     .order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(from, from + limit - 1);
   if (child !== 'all') query = query.eq('child_id', child);
@@ -584,8 +607,19 @@ async function fetchTx({ child = 'all', from = 0, limit = PAGE } = {}) {
     const rev = await q(sb.from('transactions').select('reverses_group,hidden_from_child').in('reverses_group', groups));
     for (const r of rev) reversed.set(r.reverses_group, r.hidden_from_child);
   }
-  return rows.map(r => ({ ...r, isReversed: reversed.has(r.group_id), reversalHidden: reversed.get(r.group_id) === true }));
+  // Edit history (parents only)
+  const edits = new Map();      // tx_id -> [edit rows, oldest first]
+  const editedIds = rows.filter(r => r.edit_count > 0).map(r => r.id);
+  if (S.profile.role === 'admin' && editedIds.length) {
+    const ed = await q(sb.from('transaction_edits')
+      .select('id,tx_id,edited_at,edited_by,prev_account,prev_amount,prev_type,prev_description,account,amount,type,description,note')
+      .in('tx_id', editedIds).order('id'));
+    for (const e of ed) edits.set(e.tx_id, [...(edits.get(e.tx_id) || []), e]);
+  }
+  return rows.map(r => ({ ...r, isReversed: reversed.has(r.group_id), reversalHidden: reversed.get(r.group_id) === true,
+                          edits: edits.get(r.id) || [] }));
 }
+const nameOf = id => S.names[id] || '';
 
 // ── RENDER: transactions ─────────────────────────────────
 function badgeCls(type, amount) {
@@ -599,6 +633,32 @@ function badgeCls(type, amount) {
 const NOT_EXPENSE = ['העברה', 'תיקון יתרה', 'ביטול'];
 const isExpense = tx => Number(tx.amount) < 0 && !NOT_EXPENSE.includes(tx.type);
 const txByGroup = new Map();   // group_id -> rows (for the cancel sheet summary)
+const txById = new Map();      // id -> row (for the edit sheet)
+const signed = n => `${Number(n) > 0 ? '+' : '−'}${fmt(Math.abs(Number(n)))} ₪`;
+/** Editor name; bold-italic when someone other than the creator edited it. */
+function editorHtml(tx, editorId) {
+  const name = sanitize(nameOf(editorId));
+  return editorId !== tx.entered_by ? `<b class="editor-other">${name}</b>` : name;
+}
+function historyHtml(tx) {
+  const first = tx.edits[0];
+  const creator = tx.auto ? '🤖 אוטומטי' : `ע״י ${sanitize(nameOf(tx.entered_by))}`;
+  const orig = first
+    ? { type: first.prev_type, amount: first.prev_amount, account: first.prev_account, description: first.prev_description }
+    : tx;
+  let html = `<div class="h-item"><b>מקור:</b> ${sanitize(fmtDT(tx.created_at))} · ${sanitize(orig.type)} · ${creator}
+    <div>${sanitize(orig.description)} · ${sanitize(orig.account)} · <span dir="ltr">${sanitize(signed(orig.amount))}</span></div></div>`;
+  for (const e of tx.edits) {
+    const ch = [];
+    if (Number(e.prev_amount) !== Number(e.amount)) ch.push(`סכום: <span dir="ltr">${sanitize(signed(e.prev_amount))}</span> ← <span dir="ltr">${sanitize(signed(e.amount))}</span>`);
+    if (e.prev_account !== e.account) ch.push(`חשבון: ${sanitize(e.prev_account)} ← ${sanitize(e.account)}`);
+    if (e.prev_type !== e.type) ch.push(`סוג: ${sanitize(e.prev_type)} ← ${sanitize(e.type)}`);
+    if (e.prev_description !== e.description) ch.push(`תיאור: ${sanitize(e.prev_description)} ← ${sanitize(e.description)}`);
+    html += `<div class="h-item"><b>✏️ ${sanitize(fmtDT(e.edited_at))}</b> · ע״י ${editorHtml(tx, e.edited_by)}
+      <div>${ch.join('<br>')}</div>${e.note ? `<div class="tx-note">📝 ${sanitize(e.note)}</div>` : ''}</div>`;
+  }
+  return html;
+}
 
 function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = false, append = false } = {}) {
   if (!append) ul.innerHTML = '';
@@ -607,27 +667,32 @@ function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = 
     return;
   }
   for (const tx of rows) {
-    const grp = txByGroup.get(tx.group_id) || [];
-    if (!grp.some(r => r.id === tx.id)) grp.push(tx);
+    const grp = (txByGroup.get(tx.group_id) || []).filter(r => r.id !== tx.id);
+    grp.push(tx);
     txByGroup.set(tx.group_id, grp);
+    txById.set(tx.id, tx);
 
     const amt = Number(tx.amount);
     const cls = tx.type === 'העברה' ? 'xfer' : amt > 0 ? 'pos' : 'neg';
     const child = childById(tx.child_id);
     const who = !showWho ? ''
       : tx.auto ? '<span>🤖 אוטומטי</span>'
-      : tx.by?.display_name
-        ? `<span>${isExpense(tx) ? 'הוצאה אושרה ע״י' : 'ע״י'} ${sanitize(tx.by.display_name)}</span>` : '';
+      : nameOf(tx.entered_by)
+        ? `<span>${isExpense(tx) ? 'הוצאה אושרה ע״י' : 'ע״י'} ${sanitize(nameOf(tx.entered_by))}</span>` : '';
+    const edited = showWho && tx.edit_count > 0
+      ? `<button class="hist-btn" type="button" data-hist="${tx.id}">✏️ נערך${tx.edit_count > 1 ? ` ${tx.edit_count}×` : ''} ע״י ${editorHtml(tx, tx.last_edited_by)} ▾</button>` : '';
     const meta = [
       `<span class="badge ${badgeCls(tx.type, amt)}">${sanitize(tx.type)}</span>`,
       showChild && child ? `<span>${sanitize(child.avatar)} ${sanitize(child.name)}</span>` : '',
       `<span>${sanitize(tx.account)}</span>`,
       `<span>${sanitize(fmtDT(tx.created_at))}</span>`,
       who,
+      edited,
       tx.isReversed ? `<span>· בוטל${tx.reversalHidden && showWho ? ' (מוסתר מהילד/ה)' : ''}</span>` : '',
       tx.hidden_from_child && showWho ? '<span class="badge b-adj">🙈 מוסתר מהילד/ה</span>' : '',
     ].filter(Boolean).join('');
     const undoable = canUndo && !tx.isReversed && !tx.reverses_group;
+    const editable = undoable && tx.type !== 'העברה';
     const li = document.createElement('li');
     li.className = 'tx' + (tx.isReversed ? ' reversed' : '');
     li.innerHTML = `
@@ -635,9 +700,11 @@ function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = 
         <div class="tx-desc">${sanitize(tx.description)}</div>
         ${tx.note ? `<div class="tx-note">📝 ${sanitize(tx.note)}</div>` : ''}
         <div class="tx-meta">${meta}</div>
+        ${showWho && tx.edit_count > 0 ? `<div class="tx-hist" id="hist-${tx.id}" hidden>${historyHtml(tx)}</div>` : ''}
       </div>
       <div class="tx-side">
         <div class="tx-amt ${cls}">${amt > 0 ? '+' : '−'}${sanitize(fmt(Math.abs(amt)))} ₪</div>
+        ${editable ? `<button class="undo" type="button" data-edit="${tx.id}">✏️ עריכה</button>` : ''}
         ${undoable ? `<button class="undo" type="button" data-undo="${sanitize(tx.group_id)}">↩️ ביטול</button>` : ''}
       </div>`;
     ul.appendChild(li);
@@ -676,6 +743,11 @@ async function enter() {
     return;
   }
   S.profile = profile;
+  S.names = { [profile.id]: profile.display_name };
+  if (profile.role === 'admin') {
+    const ps = await q(sb.from('profiles').select('id,display_name'));
+    S.names = Object.fromEntries(ps.map(p => [p.id, p.display_name]));
+  }
   await loadChildrenAndBalances();
   if (profile.role === 'admin') {
     try { S.selected = localStorage.getItem('bomd-selected'); } catch {}
@@ -804,8 +876,10 @@ function resetForm(form) {
   form.reset();  // restores the default-checked radios
 }
 let sheetOpen = null;
+let pendingReset = null;   // delayed reset of the last closed form (after the slide-out animation)
 function openSheet(kind) {
-  const noChild = kind === 'interest' || kind === 'password' || kind === 'undo';
+  if (pendingReset) { clearTimeout(pendingReset.timer); resetForm(pendingReset.form); pendingReset = null; }
+  const noChild = ['interest', 'password', 'undo', 'edit'].includes(kind);
   if (!S.selected && !noChild) { toast('⚠️ בחרו ילד/ה'); return; }
   const form = $('f-' + kind);
   const c = childById(S.selected);
@@ -846,7 +920,7 @@ function hideSheet() {
   $('overlay').classList.remove('open');
   $('sheet').classList.remove('open');
   sheetOpen = null;
-  setTimeout(() => resetForm(form), 260);
+  pendingReset = { form, timer: setTimeout(() => { resetForm(form); pendingReset = null; }, 260) };
 }
 function closeSheet() {
   if (history.state?.sheet) history.back(); else hideSheet();
@@ -1059,6 +1133,58 @@ $('resetForm').addEventListener('submit', e => {
   });
 });
 
+// ── EDIT ─────────────────────────────────────────────────
+let editTx = null;
+const chipOptions = sel => document.querySelector(sel).dataset.options.split(',').map(o => o.split('|'));
+function openEdit(btn) {
+  const tx = txById.get(Number(btn.dataset.edit));
+  if (!tx) return;
+  editTx = tx;
+  const f = $('f-edit');
+  const c = childById(tx.child_id);
+  const creator = tx.auto ? '🤖 אוטומטי' : nameOf(tx.entered_by);
+  $('editSummary').innerHTML = `
+    <div><span>${sanitize(c?.avatar ?? '')} ${sanitize(c?.name ?? '')}</span><b>${sanitize(signed(tx.amount))}</b></div>
+    <div><span>נוצר ${sanitize(fmtDT(tx.created_at))} · ${sanitize(tx.type)} · ${sanitize(creator)}</span></div>`;
+
+  // Type choices depend on the kind of entry; other kinds keep their type.
+  const amt = Number(tx.amount);
+  const exp = chipOptions('#f-expense [data-chips]'), occ = chipOptions('#f-deposit [data-chips]');
+  const list = amt < 0 && exp.some(([, v]) => v === tx.type) ? exp
+             : amt > 0 && occ.some(([, v]) => v === tx.type) ? occ : null;
+  $('editTypes').innerHTML = (list || [['', tx.type]]).map(([icon, v]) =>
+    `<label><input type="radio" name="type" value="${sanitize(v)}" ${v === tx.type ? 'checked' : ''}>
+      <span>${icon} ${sanitize(v)}</span></label>`).join('');
+
+  openSheet('edit');
+  f.amount.value = Math.abs(amt);
+  f.desc.value = tx.description;
+  f.note.value = '';
+  f.querySelectorAll('input[name="account"]').forEach(i => { i.checked = i.value === tx.account; });
+}
+$('f-edit').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f), tx = editTx;
+  const amount = parseAmt(fd.get('amount'));
+  const desc = sliceStr(fd.get('desc'), 120);
+  if (isNaN(amount)) { toast('⚠️ הכניסו סכום תקין'); f.amount.focus(); return; }
+  if (!desc) { toast('⚠️ הוסיפו תיאור'); f.desc.focus(); return; }
+  run(e.submitter, async () => {
+    await q(sb.rpc('edit_entry', {
+      p_tx: tx.id, p_account: fd.get('account'), p_amount: amount,
+      p_type: fd.get('type') || tx.type, p_desc: desc, p_note: sliceStr(fd.get('note'), 200) || null,
+    }));
+    closeSheet();
+    await afterWrite('✅ הפעולה עודכנה. השינוי נשמר ביומן');
+  });
+});
+function toggleHistory(btn) {
+  const el = $('hist-' + btn.dataset.hist);
+  if (!el) return;
+  el.hidden = !el.hidden;
+  btn.innerHTML = btn.innerHTML.replace(el.hidden ? '▴' : '▾', el.hidden ? '▾' : '▴');
+}
+
 // ── CANCEL (UNDO) ────────────────────────────────────────
 let undoGroup = null;
 function updateUndoHint() {
@@ -1092,10 +1218,12 @@ $('f-undo').addEventListener('submit', e => {
 
 // ── EVENT DELEGATION ─────────────────────────────────────
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-sheet],[data-action],[data-undo]');
+  const el = e.target.closest('[data-sheet],[data-action],[data-undo],[data-edit],[data-hist]');
   if (!el) return;
   if (el.dataset.sheet) return openSheet(el.dataset.sheet);
   if (el.dataset.undo) return undo(el);
+  if (el.dataset.edit) return openEdit(el);
+  if (el.dataset.hist) return toggleHistory(el);
   switch (el.dataset.action) {
     case 'logout': return logout();
     case 'log':    return showLog();
