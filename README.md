@@ -13,7 +13,7 @@ A small family app for tracking the kids' pocket money (spending, savings and in
 - The Supabase *publishable* key in `index.html` is meant to be public. The data is protected by RLS.
 
 ## One-time setup
-1. **Supabase → SQL Editor:** run `supabase/schema.sql`.
+1. **Supabase → SQL Editor:** run `supabase/schema.sql`, then `supabase/002-allowance-passwords.sql`.
 2. **Supabase → Authentication → Sign In / Providers → Email:** turn off *Confirm email*. You can also turn off *Allow new users to sign up*, because users are created by hand.
 3. **Supabase → Authentication → Users → Add user → Create new user:** create one user per person, such as `parent1@bomd.local`, with *Auto Confirm User* ticked.
 4. Copy `supabase/seed.example.sql` to `supabase/seed.local.sql`, which git ignores. Fill in the real names and usernames, then run it in the SQL Editor. Its last query should show a `profile_id` for every user.
@@ -23,7 +23,8 @@ A small family app for tracking the kids' pocket money (spending, savings and in
 ## Everyday use
 - Open the Pages URL on your phone and use **Add to Home Screen**.
 - **Parents:** tap a child, then **➖ הוצאה** (expense) or **➕ הפקדה / דמי כיס** (deposit or allowance).
-- **Changing a password:** Supabase → Authentication → Users → … → *Reset password*, or set a new one there.
+- **Changing a password:** everyone can change their own (🔑). A parent can set a new password for anyone who forgot theirs under ⚙️ הגדרות.
+- **Weekly allowance:** the amounts are set per child under ⚙️ הגדרות. It is deposited automatically every Friday at 11:59 Israel time by a `pg_cron` job in Supabase. Each child has an on/off switch.
 
 ## Local preview
 ```bash

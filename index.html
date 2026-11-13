@@ -111,8 +111,8 @@
     .big-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .big-actions .btn { min-height: 84px; font-size: 1.2rem; flex-direction: column; gap: 2px; border-radius: 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
     .big-actions .btn b { font-size: 1.7rem; line-height: 1; }
-    .small-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
-    .small-actions button { background: rgba(255,255,255,0.18); color: white; border: none; border-radius: 14px; min-height: 52px; font-size: 0.9rem; font-weight: 600; }
+    .small-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; }
+    .small-actions button { background: rgba(255,255,255,0.18); color: white; border: none; border-radius: 14px; min-height: 56px; font-size: 0.82rem; font-weight: 600; padding: 4px; line-height: 1.25; }
     .small-actions button:active { background: rgba(255,255,255,0.32); }
 
     /* ── Transaction list ── */
@@ -181,6 +181,24 @@
     .toast { position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%); background: #111827; color: white; padding: 12px 20px; border-radius: 16px; font-size: 0.95rem; max-width: calc(100vw - 32px); width: max-content; text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; z-index: 400; }
     .toast.show { opacity: 1; }
     .boot { color: white; text-align: center; padding-top: 40vh; }
+
+    /* ── Settings ── */
+    .al-row { border-top: 1px solid #f0f0f0; padding: 12px 0; }
+    .al-row:first-of-type { border-top: none; padding-top: 0; }
+    .al-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-weight: 700; }
+    .al-head .sum { font-weight: 600; color: #667eea; font-size: 0.9rem; }
+    .al-row .row3 .field { margin-bottom: 8px; }
+    .al-row .row3 label { font-size: 0.8rem; color: #666; display: block; margin-bottom: 4px; text-align: center; }
+    .al-foot { display: flex; align-items: center; gap: 10px; }
+    .al-foot .btn { width: auto; flex: 0 0 auto; min-height: 44px; padding: 0 18px; font-size: 0.95rem; }
+    .toggle { display: flex; align-items: center; gap: 8px; flex: 1; font-size: 0.9rem; color: #444; min-height: 44px; }
+    .toggle input { width: 22px; height: 22px; accent-color: #667eea; }
+    .note { font-size: 0.85rem; color: #666; background: #f5f3ff; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+    .log-mini { list-style: none; font-size: 0.85rem; }
+    .log-mini li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+    .log-mini li:last-child { border-bottom: none; }
+    .log-mini small { color: #888; display: block; margin-top: 2px; }
+    .kid-allow { text-align: center; color: rgba(255,255,255,0.9); font-size: 0.88rem; margin: -6px 0 14px; }
   </style>
 </head>
 <body>
@@ -220,6 +238,7 @@
     <button data-sheet="transfer">🔄 העברה</button>
     <button data-sheet="interest">📈 ריבית</button>
     <button data-sheet="adjust">✏️ תיקון יתרה</button>
+    <button data-action="settings">⚙️ הגדרות</button>
   </div>
   <section class="card">
     <h2><span id="recentTitle">פעולות אחרונות</span><button class="link-btn" data-action="log">📋 יומן מלא</button></h2>
@@ -240,13 +259,42 @@
   </section>
 </main>
 
+<!-- SETTINGS (parents) -->
+<main id="settings" class="screen">
+  <div class="bar">
+    <button class="pill-btn" data-action="back">→ חזרה</button>
+    <h1>⚙️ הגדרות</h1>
+  </div>
+  <section class="card">
+    <h2>📅 דמי כיס שבועיים</h2>
+    <p class="note">🤖 מופקדים אוטומטית בכל יום שישי ב־11:59. אפשר לכבות לכל ילד/ה בנפרד (למשל בחופשה).</p>
+    <div id="allowanceRows"></div>
+  </section>
+  <section class="card">
+    <h2>🔑 סיסמאות</h2>
+    <button class="btn ghost" type="button" data-sheet="password" style="margin-bottom:16px">🔑 החלפת הסיסמה שלי</button>
+    <form id="resetForm" autocomplete="off">
+      <div class="field"><span class="lbl">איפוס סיסמה (למי ששכח)</span><div class="chips-wrap" id="resetWho"></div></div>
+      <div class="field"><label for="resetPass">סיסמה חדשה</label>
+        <input class="input ltr" id="resetPass" name="password" type="text" minlength="6" maxlength="72" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="לפחות 6 תווים"></div>
+      <button class="btn" type="submit">🔐 קבע סיסמה חדשה</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>🗂️ שינויי הגדרות</h2>
+    <ul class="log-mini" id="settingsLog"></ul>
+  </section>
+</main>
+
 <!-- KID DASHBOARD -->
 <main id="kid" class="screen">
   <div class="bar">
     <h1 id="kidHello"></h1>
+    <button class="pill-btn" data-sheet="password" aria-label="החלפת סיסמה">🔑</button>
     <button class="pill-btn" data-action="logout">יציאה</button>
   </div>
   <div class="kid-total"><div>סה״כ יש לי</div><div class="big" id="kidTotal"></div></div>
+  <div class="kid-allow" id="kidAllow"></div>
   <div class="kid-accs" id="kidAccs"></div>
   <section class="card">
     <h2>📋 מה קרה בחשבון</h2>
@@ -284,7 +332,7 @@
         <button class="btn green" type="button" data-action="weekly-one" id="weeklyOneBtn">📅 דמי כיס</button>
         <button class="btn ghost" type="button" data-action="weekly-all">📅 לכל הילדים</button>
       </div>
-      <p class="hint">דמי כיס שבועיים: 5 ₪ בזבוזים · 5 ₪ חסכון · 10 ₪ השקעה</p>
+      <p class="hint" id="weeklyHint"></p>
       <div class="divider">או הפקדה מיוחדת</div>
       <div class="field"><span class="lbl">סכום (₪)</span>
         <input class="input amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0"></div>
@@ -331,6 +379,21 @@
       </div>
     </div>
     <div class="sheet-foot"><button class="btn" type="submit">💾 שמור יתרה</button></div>
+  </form>
+
+  <!-- Change my password -->
+  <form id="f-password" data-title="🔑 החלפת סיסמה" autocomplete="on">
+    <div class="sheet-body">
+      <input type="text" name="username" autocomplete="username" hidden>
+      <div class="field"><label>סיסמה נוכחית</label>
+        <input class="input ltr" name="current" type="password" autocomplete="current-password" maxlength="72" required></div>
+      <div class="field"><label>סיסמה חדשה (לפחות 6 תווים)</label>
+        <input class="input ltr" name="next" type="password" autocomplete="new-password" minlength="6" maxlength="72" required></div>
+      <div class="field"><label>שוב את הסיסמה החדשה</label>
+        <input class="input ltr" name="again" type="password" autocomplete="new-password" minlength="6" maxlength="72" required enterkeyhint="done"></div>
+      <p class="hint">שכחת סיסמה? אמא או אבא יכולים לקבוע לך סיסמה חדשה.</p>
+    </div>
+    <div class="sheet-foot"><button class="btn" type="submit">💾 שמור סיסמה</button></div>
   </form>
 </div>
 
@@ -385,6 +448,7 @@ const S = {
   profile: null,      // { id, username, display_name, role, child_id }
   children: [],       // [{ id, name, avatar }]
   balances: {},       // childId -> { spending, savings, invest }
+  allowance: {},      // childId -> { spending, savings, invest, auto_active }
   selected: null,     // selected child id (parent view)
   logFilter: 'all',
   logOffset: 0,
@@ -477,14 +541,22 @@ async function loadChildrenAndBalances() {
   ]);
   S.children = children;
   S.balances = Object.fromEntries(balances.map(b => [b.child_id, b]));
+  await loadAllowance();
 }
+const DEFAULT_ALLOWANCE = { spending: 5, savings: 5, invest: 10, auto_active: true };
+async function loadAllowance() {
+  const rows = await q(sb.from('allowance').select('child_id,spending,savings,invest,auto_active'));
+  S.allowance = Object.fromEntries(rows.map(r => [r.child_id, r]));
+}
+const allowanceOf = id => S.allowance[id] || DEFAULT_ALLOWANCE;
+const allowanceTotal = a => Number(a.spending) + Number(a.savings) + Number(a.invest);
 async function refreshBalances() {
   const balances = await q(sb.from('balances').select('child_id,spending,savings,invest'));
   S.balances = Object.fromEntries(balances.map(b => [b.child_id, b]));
 }
 async function fetchTx({ child = 'all', from = 0, limit = PAGE } = {}) {
   let query = sb.from('transactions')
-    .select('id,group_id,child_id,account,amount,type,description,created_at,reverses_group,by:profiles(display_name)')
+    .select('id,group_id,child_id,account,amount,type,description,created_at,reverses_group,auto,by:profiles(display_name)')
     .order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(from, from + limit - 1);
   if (child !== 'all') query = query.eq('child_id', child);
@@ -523,7 +595,8 @@ function renderTxList(ul, rows, { showChild = false, showWho = false, canUndo = 
       showChild && child ? `<span>${sanitize(child.avatar)} ${sanitize(child.name)}</span>` : '',
       `<span>${sanitize(tx.account)}</span>`,
       `<span>${sanitize(fmtDT(tx.created_at))}</span>`,
-      showWho && tx.by?.display_name ? `<span>ע״י ${sanitize(tx.by.display_name)}</span>` : '',
+      showWho && tx.auto ? '<span>🤖 אוטומטי</span>'
+        : showWho && tx.by?.display_name ? `<span>ע״י ${sanitize(tx.by.display_name)}</span>` : '',
     ].filter(Boolean).join('');
     const undoable = canUndo && !tx.isReversed && !tx.reverses_group;
     const li = document.createElement('li');
@@ -664,6 +737,9 @@ async function showKid() {
   const bal = S.balances[S.profile.child_id] || {};
   $('kidHello').textContent = `היי ${c.name}! ${c.avatar}`;
   $('kidTotal').textContent = money(totalOf(bal));
+  const al = allowanceOf(S.profile.child_id);
+  $('kidAllow').textContent = al.auto_active && allowanceTotal(al) > 0
+    ? `📅 כל יום שישי מקבלים ${money(allowanceTotal(al))} דמי כיס` : '';
   $('kidAccs').innerHTML = ACCOUNTS.map(a => `
     <div class="acc ${a.cls}"><div class="ic">${a.icon}</div>
       <div><div class="lb">${sanitize(a.key)}</div><div class="ds">${sanitize(a.desc)}</div></div>
@@ -699,13 +775,20 @@ function resetForm(form) {
 }
 let sheetOpen = null;
 function openSheet(kind) {
-  if (!S.selected && kind !== 'interest') { toast('⚠️ בחרו ילד/ה'); return; }
+  const noChild = kind === 'interest' || kind === 'password';
+  if (!S.selected && !noChild) { toast('⚠️ בחרו ילד/ה'); return; }
   const form = $('f-' + kind);
   const c = childById(S.selected);
   document.querySelectorAll('.sheet form').forEach(f => f.classList.toggle('active', f === form));
-  $('sheetTitle').textContent = kind === 'interest' ? form.dataset.title : `${form.dataset.title} — ${c.name} ${c.avatar}`;
+  $('sheetTitle').textContent = noChild ? form.dataset.title : `${form.dataset.title} — ${c.name} ${c.avatar}`;
 
-  if (kind === 'deposit') $('weeklyOneBtn').textContent = `📅 דמי כיס ל${c.name}`;
+  if (kind === 'password') form.username.value = S.profile.username;
+  if (kind === 'deposit') {
+    const a = allowanceOf(S.selected);
+    $('weeklyOneBtn').textContent = `📅 דמי כיס ל${c.name}`;
+    $('weeklyHint').textContent = `דמי הכיס של ${c.name}: ${fmt(a.spending)} בזבוזים · ${fmt(a.savings)} חסכון · ${fmt(a.invest)} השקעה` +
+      (a.auto_active ? ' · מופקדים אוטומטית בשישי 11:59, אין צורך ללחוץ' : '');
+  }
   if (kind === 'interest') {
     $('interestWho').innerHTML = [
       `<label><input type="radio" name="who" value="${sanitize(S.selected)}" checked><span><b>${sanitize(c.avatar)}</b>${sanitize(c.name)}</span></label>`,
@@ -723,8 +806,8 @@ function openSheet(kind) {
   $('sheet').classList.add('open');
   history.pushState({ sheet: kind }, '');
   // Focus the amount field for the fast path (opens numeric keypad on phones)
-  const amt = form.querySelector('[name="amount"]');
-  if (amt && kind !== 'deposit') setTimeout(() => amt.focus({ preventScroll: true }), 260);
+  const first = form.querySelector(kind === 'password' ? '[name="current"]' : '[name="amount"]');
+  if (first && kind !== 'deposit') setTimeout(() => first.focus({ preventScroll: true }), 260);
 }
 function hideSheet() {
   if (!sheetOpen) return;
@@ -740,7 +823,7 @@ function closeSheet() {
 }
 window.addEventListener('popstate', () => {
   if (sheetOpen) { hideSheet(); return; }
-  if ($('log').classList.contains('active')) showParent();
+  if ($('log').classList.contains('active') || $('settings').classList.contains('active')) showParent();
 });
 $('overlay').onclick = closeSheet;
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen) closeSheet(); });
@@ -841,6 +924,111 @@ $('f-adjust').addEventListener('submit', e => {
   });
 });
 
+// ── PASSWORDS ────────────────────────────────────────────
+$('f-password').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const cur = f.current.value, next = f.next.value, again = f.again.value;
+  if (next.length < 6) { toast('⚠️ הסיסמה החדשה קצרה מדי (לפחות 6 תווים)'); return; }
+  if (next !== again) { toast('⚠️ הסיסמאות החדשות לא זהות'); f.again.focus(); return; }
+  if (next === cur) { toast('⚠️ הסיסמה החדשה זהה לישנה'); return; }
+  run(e.submitter, async () => {
+    // Re-check the current password before changing it
+    const { error: authErr } = await sb.auth.signInWithPassword({ email: S.profile.username + LOGIN_DOMAIN, password: cur });
+    if (authErr) { toast('❌ הסיסמה הנוכחית שגויה'); f.current.value = ''; f.current.focus(); return; }
+    const { error } = await sb.auth.updateUser({ password: next });
+    if (error) throw error;
+    closeSheet();
+    toast('✅ הסיסמה הוחלפה');
+  });
+});
+
+// ── SETTINGS (parents) ───────────────────────────────────
+let profiles = [];
+async function showSettings() {
+  history.pushState({ screen: 'settings' }, '');
+  showScreen('settings');
+  renderAllowanceRows();
+  await run(null, async () => {
+    const [p] = await Promise.all([
+      q(sb.from('profiles').select('username,display_name,role,child_id').order('role').order('username')),
+      loadAllowance(),
+    ]);
+    profiles = p;
+    renderAllowanceRows();
+    renderResetWho();
+    await renderSettingsLog();
+  });
+}
+function renderAllowanceRows() {
+  const box = $('allowanceRows');
+  box.innerHTML = '';
+  for (const c of S.children) {
+    const a = allowanceOf(c.id);
+    const row = document.createElement('form');
+    row.className = 'al-row';
+    row.dataset.child = c.id;
+    row.innerHTML = `
+      <div class="al-head"><span>${sanitize(c.avatar)} ${sanitize(c.name)}</span>
+        <span class="sum">${sanitize(money(allowanceTotal(a)))} בשבוע</span></div>
+      <div class="row3">
+        <div class="field"><label>🛍️ בזבוזים</label><input class="input" name="spending" inputmode="decimal" autocomplete="off" value="${sanitize(Number(a.spending))}"></div>
+        <div class="field"><label>🐷 חסכון</label><input class="input" name="savings" inputmode="decimal" autocomplete="off" value="${sanitize(Number(a.savings))}"></div>
+        <div class="field"><label>📈 השקעה</label><input class="input" name="invest" inputmode="decimal" autocomplete="off" value="${sanitize(Number(a.invest))}"></div>
+      </div>
+      <div class="al-foot">
+        <label class="toggle"><input type="checkbox" name="auto" ${a.auto_active ? 'checked' : ''}> 🤖 הפקדה אוטומטית</label>
+        <button class="btn" type="submit">💾 שמור</button>
+      </div>`;
+    row.addEventListener('submit', saveAllowance);
+    box.appendChild(row);
+  }
+}
+function saveAllowance(e) {
+  e.preventDefault();
+  const f = e.target, child = f.dataset.child;
+  const vals = ['spending', 'savings', 'invest'].map(k => parseBal(f[k].value));
+  if (vals.some(v => isNaN(v) || v > 1000)) { toast('⚠️ סכום לא תקין (0 – 1,000)'); return; }
+  run(e.submitter, async () => {
+    await q(sb.rpc('set_allowance', {
+      p_child: child, p_spending: vals[0], p_savings: vals[1], p_invest: vals[2], p_auto_active: f.auto.checked,
+    }));
+    await loadAllowance();
+    renderAllowanceRows();
+    await renderSettingsLog();
+    toast(`✅ דמי הכיס של ${childName(child)} עודכנו`);
+  });
+}
+function renderResetWho() {
+  $('resetWho').innerHTML = profiles.map((p, i) => {
+    const c = p.child_id ? childById(p.child_id) : null;
+    return `<label><input type="radio" name="who" value="${sanitize(p.username)}" ${i === 0 ? 'checked' : ''}>
+      <span>${sanitize(c ? c.avatar : '🧑')} ${sanitize(p.display_name)}</span></label>`;
+  }).join('');
+}
+async function renderSettingsLog() {
+  const rows = await q(sb.from('settings_log').select('created_at,action,details,by:profiles(display_name)')
+    .order('created_at', { ascending: false }).limit(20));
+  $('settingsLog').innerHTML = rows.length
+    ? rows.map(r => `<li><b>${sanitize(r.action)}</b> — ${sanitize(r.details)}
+        <small>${sanitize(fmtDT(r.created_at))} · ע״י ${sanitize(r.by?.display_name ?? '')}</small></li>`).join('')
+    : '<li class="empty">אין שינויים עדיין</li>';
+}
+$('resetForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const who = fd.get('who'), pass = f.password.value;
+  if (!who) { toast('⚠️ בחרו למי'); return; }
+  if (pass.length < 6) { toast('⚠️ לפחות 6 תווים'); f.password.focus(); return; }
+  const name = profiles.find(p => p.username === who)?.display_name ?? who;
+  run(e.submitter, async () => {
+    await q(sb.rpc('reset_password', { p_username: who, p_password: pass }));
+    f.password.value = '';
+    await renderSettingsLog();
+    toast(`✅ נקבעה סיסמה חדשה ל${name}`, 4000);
+  });
+});
+
 async function undo(btn) {
   if (!confirmTap(btn, 'בטוח? לחצו שוב')) return;
   await run(btn, async () => {
@@ -858,9 +1046,10 @@ document.addEventListener('click', e => {
   switch (el.dataset.action) {
     case 'logout': return logout();
     case 'log':    return showLog();
-    case 'back':   return history.state?.screen === 'log' ? history.back() : showParent();
+    case 'settings': return showSettings();
+    case 'back':   return history.state?.screen ? history.back() : showParent();
     case 'close':  return closeSheet();
-    case 'weekly-one': return weekly(el, S.selected);
+    case 'weekly-one': if (confirmTap(el)) weekly(el, S.selected); return;
     case 'weekly-all': if (confirmTap(el)) weekly(el, 'all'); return;
   }
 });
